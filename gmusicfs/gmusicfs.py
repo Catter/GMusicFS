@@ -9,6 +9,7 @@ import ConfigParser
 from errno import ENOENT
 from stat import S_IFDIR, S_IFREG
 import time
+import uuid
 import argparse
 import operator
 import shutil
@@ -19,6 +20,7 @@ import unicodedata
 
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn, fuse_get_context
 from gmusicapi import Mobileclient as GoogleMusicAPI
+from gmusicapi import Musicmanager as GoogleMusicManager
 
 import fifo
 
@@ -164,12 +166,18 @@ class MusicLibrary(object):
                 raise NoCredentialException(
                     'No username/password could be read from config file'
                     ': %s' % cred_path)
-
+                
         self.api = GoogleMusicAPI(debug_logging=self.verbose)
         log.info('Logging in...')
         self.api.login(username, password)
         log.info('Login successful.')
-                
+	self.manager = GoogleMusicManager()
+	self.manager_id = ':'.join(['{:02x}'.format((uuid.getnode() >> i) & 0xff) for i in range(0,8*6,8)][::-1])
+	log.info('Registering the google music manager...')
+	oauthcred = 
+	self.manager.login(oaudcred, self.manager_id, 'GMusicFS')
+	log.info('Successfully registered the  google music manager...')
+        
     def __aggregate_albums(self):
         'Get all the tracks in the library, parse into artist and album dicts'
         all_artist_albums = {} # 'Artist|||Album' -> Album()
