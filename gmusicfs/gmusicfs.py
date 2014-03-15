@@ -19,7 +19,6 @@ import unicodedata
 
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn, fuse_get_context
 from gmusicapi import Mobileclient as GoogleMusicAPI
-from gmusicapi import Musicmanager as GoogleMusicManager
 
 import fifo
 
@@ -165,6 +164,11 @@ class MusicLibrary(object):
                 raise NoCredentialException(
                     'No username/password could be read from config file'
                     ': %s' % cred_path)
+
+        self.api = GoogleMusicAPI(debug_logging=self.verbose)
+        log.info('Logging in...')
+        self.api.login(username, password)
+        log.info('Login successful.')
                 
     def __aggregate_albums(self):
         'Get all the tracks in the library, parse into artist and album dicts'
