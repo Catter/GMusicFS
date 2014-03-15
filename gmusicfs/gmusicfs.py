@@ -15,9 +15,11 @@ import shutil
 import tempfile
 import threading
 import logging
+import unicodedata
 
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn, fuse_get_context
-from gmusicapi import Webclient as GoogleMusicAPI
+from gmusicapi import Mobileclient as GoogleMusicAPI
+from gmusicapi import Musicmanager as GoogleMusicManager
 
 import fifo
 
@@ -32,6 +34,9 @@ ID3V1_TRAILER_SIZE = 128
 def formatNames(string_from):
     return re.sub('/', '-', string_from)
 
+def normalize(metadata):
+    result = ''.join((c for c in unicodedata.normalize('NFD', metadata) if unicodedata.category(c) != 'Mn'))
+    return result.lower() 
 
 class NoCredentialException(Exception):
     pass
@@ -71,13 +76,13 @@ class Album(object):
         if m:
             title = m.groups()[0]
             for track in self.get_tracks():
-                if formatNames(track['titleNorm']) == title:
+                if formatNames(track['title']) == title:
                     return track
         return None
 
     def get_track_stream(self, track):
         "Get the track stream URL"
-        return self.library.api.get_stream_urls(track['id'])
+        return self.library.api.get_stream_url(track['id'], self.library.manager_id)
 
     def get_cover_url(self):
         'Get the album cover image URL'
@@ -124,6 +129,7 @@ class MusicLibrary(object):
     def __init__(self, username=None, password=None,
                  true_file_size=False, scan=True, verbose=0):
         self.verbose = False
+	self.manager_id = 0
         if verbose > 1:
             self.verbose = True
 
@@ -160,11 +166,6 @@ class MusicLibrary(object):
                     'No username/password could be read from config file'
                     ': %s' % cred_path)
                 
-        self.api = GoogleMusicAPI(debug_logging=self.verbose)
-        log.info('Logging in...')
-        self.api.login(username, password)
-        log.info('Login successful.')
-        
     def __aggregate_albums(self):
         'Get all the tracks in the library, parse into artist and album dicts'
         all_artist_albums = {} # 'Artist|||Album' -> Album()
@@ -172,18 +173,16 @@ class MusicLibrary(object):
         tracks = self.api.get_all_songs()
         for track in tracks:
             # Prefer the album artist over the track artist if there is one:
-            artist = track['albumArtistNorm']
-            if artist.strip() == '':
-                artist = track['artistNorm']
+            artist = normalize(track['artist'])
             # Get the Album object if it already exists:
-            key = '%s|||%s' % (formatNames(artist), formatNames(track['albumNorm']))
+            key = '%s|||%s' % (formatNames(artist), formatNames(normalize(track['album'])))
             album = all_artist_albums.get(key, None)
             if not album:
                 # New Album
                 if artist == '':
                     artist = 'unknown'
                 album = all_artist_albums[key] = Album(
-                    self, formatNames(track['albumNorm']))
+                    self, formatNames(normalize(track['album'])))
                 self.__albums.append(album)
                 artist_albums = self.__artists.get(artist, None)
                 if artist_albums:
