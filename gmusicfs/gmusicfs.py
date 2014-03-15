@@ -7,6 +7,7 @@ import struct
 import urllib2
 import ConfigParser
 from errno import ENOENT
+from datetime import date
 from stat import S_IFDIR, S_IFREG
 import time
 import uuid
@@ -16,8 +17,10 @@ import shutil
 import tempfile
 import threading
 import logging
+import datetime
 import unicodedata
 
+from oauth2client.client import OAuth2Credentials
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn, fuse_get_context
 from gmusicapi import Mobileclient as GoogleMusicAPI
 from gmusicapi import Musicmanager as GoogleMusicManager
@@ -135,6 +138,7 @@ class MusicLibrary(object):
             self.verbose = True
 
         self.__login_and_setup(username, password)
+	self.__register_music_manager()
         if scan:
             self.rescan()
         self.true_file_size = true_file_size
@@ -171,12 +175,19 @@ class MusicLibrary(object):
         log.info('Logging in...')
         self.api.login(username, password)
         log.info('Login successful.')
+
+    def __register_music_manager(self):
 	self.manager = GoogleMusicManager()
 	self.manager_id = ':'.join(['{:02x}'.format((uuid.getnode() >> i) & 0xff) for i in range(0,8*6,8)][::-1])
 	log.info('Registering the google music manager...')
-	oauthcred = 
-	self.manager.login(oaudcred, self.manager_id, 'GMusicFS')
-	log.info('Successfully registered the  google music manager...')
+	oauthcred = OAuth2Credentials("gmusicfs access token",
+            self.config.get('credentials', 'username'),
+            self.config.get('credentials', 'password'),
+            "refresh-token",
+            date(datetime.MAXYEAR, 12, 31), # token expiry
+            "https://accounts.google.com/o/oauth2/token")
+	self.manager.login(oauthcred, self.manager_id, 'GMusicFS')
+	log.info('Successfully registered the google music manager...')
         
     def __aggregate_albums(self):
         'Get all the tracks in the library, parse into artist and album dicts'
