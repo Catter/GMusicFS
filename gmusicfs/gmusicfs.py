@@ -5,6 +5,7 @@ import re
 import sys
 import struct
 import urllib2
+import os.path
 import ConfigParser
 from errno import ENOENT
 from datetime import date
@@ -180,13 +181,16 @@ class MusicLibrary(object):
 	self.manager = GoogleMusicManager()
 	self.manager_id = ':'.join(['{:02x}'.format((uuid.getnode() >> i) & 0xff) for i in range(0,8*6,8)][::-1])
 	log.info('Registering the google music manager...')
-	oauthcred = OAuth2Credentials("gmusicfs access token",
-            self.config.get('credentials', 'username'),
-            self.config.get('credentials', 'password'),
-            "refresh-token",
-            date(datetime.MAXYEAR, 12, 31), # token expiry
-            "https://accounts.google.com/o/oauth2/token")
-	self.manager.login(oauthcred, self.manager_id, 'GMusicFS')
+        cred_path = os.path.join(os.path.expanduser('~'), '.gmusicfs.ocred')
+	if not os.path.isfile(cred_path):
+	    log.info('Authorizing GMusicFS application against Google...')
+	    self.manager.perform_oauth(storage_filepath=cred_path)
+	    os.chmod(cred_path, 0600)
+        if not oct(os.stat(cred_path)[os.path.stat.ST_MODE]).endswith('00'):
+            raise NoCredentialException(
+                'Config file is not protected. Please run: '
+                'chmod 600 %s' % cred_path)
+	self.manager.login(oauth_credentials=cred_path, self.manager_id, 'GMusicFS')
 	log.info('Successfully registered the google music manager...')
         
     def __aggregate_albums(self):
