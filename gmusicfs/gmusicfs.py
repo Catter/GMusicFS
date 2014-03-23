@@ -15,7 +15,6 @@ import uuid
 import argparse
 import operator
 import shutil
-import tempfile
 import threading
 import logging
 import datetime
@@ -68,7 +67,7 @@ class Album(object):
         if get_size and self.library.true_file_size:
             for t in self.__tracks:
                 if not t.has_key('bytes'):
-                    r = urllib2.Request(self.get_track_stream(t)[0])
+                    r = urllib2.Request(self.get_track_stream(t))
                     r.get_method = lambda: 'HEAD'
                     u = urllib2.urlopen(r)
                     t['bytes'] = int(u.headers['Content-Length']) + ID3V1_TRAILER_SIZE
@@ -81,7 +80,7 @@ class Album(object):
         if m:
             title = m.groups()[0]
             for track in self.get_tracks():
-                if formatNames(track['title']) == title:
+                if formatNames(normalize(track['title'])) == title:
                     return track
         return None
 
@@ -93,7 +92,7 @@ class Album(object):
         'Get the album cover image URL'
         try:
             #Assume the first track has the right cover URL:
-            url = "http:%s" % self.__tracks[0]['albumArtUrl']
+            url = self.__tracks[0]['albumArtRef'][0]['url']
         except:
             url = None
         return url
@@ -190,7 +189,7 @@ class MusicLibrary(object):
             raise NoCredentialException(
                 'Config file is not protected. Please run: '
                 'chmod 600 %s' % cred_path)
-	self.manager.login(oauth_credentials=cred_path, self.manager_id, 'GMusicFS')
+	self.manager.login(cred_path, self.manager_id, 'GMusicFS')
 	log.info('Successfully registered the google music manager...')
         
     def __aggregate_albums(self):
@@ -288,9 +287,9 @@ class GMusicFS(LoggingMixIn, Operations):
             st = {
                 'st_mode' : (S_IFREG | 0444),
                 'st_size' : track.get('bytes', 2000000000),
-                'st_ctime' : track['creationDate'] / 1000000,
-                'st_mtime' : track['creationDate'] / 1000000,
-                'st_atime' : track['lastPlayed'] / 1000000}
+                'st_ctime' : int(track['creationTimestamp']),
+                'st_mtime' : int(track['lastModifiedTimestamp']),
+                'st_atime' : int(track['recentTimestamp'])}
         elif artist_album_image_m:
             parts = artist_album_image_m.groupdict()
             album = self.library.get_artists()[
@@ -315,21 +314,17 @@ class GMusicFS(LoggingMixIn, Operations):
             album = self.library.get_artists()[
                 parts['artist']][parts['album']]
             track = album.get_track(parts['track'])
-            urls = album.get_track_stream(track)
+            url = album.get_track_stream(track)
         elif artist_album_image_m:
             parts = artist_album_image_m.groupdict()
             album = self.library.get_artists()[
                 parts['artist']][parts['album']]
-            urls = [album.get_cover_url()]
+            url = album.get_cover_url()
         else:
             RuntimeError('unexpected opening of path: %r' % path)
 
-        #Check for multi-part 
-        if len(urls) > 1:
-            self.__open_files[fh] = self.__open_multi_part(urls, path)
-        else:
-            u = self.__open_files[fh] = urllib2.urlopen(urls[0])
-            u.bytes_read = 0
+        u = self.__open_files[fh] = urllib2.urlopen(url)
+        u.bytes_read = 0
         return fh
 
     def __open_multi_part(self, urls, path):
@@ -362,7 +357,7 @@ class GMusicFS(LoggingMixIn, Operations):
             track = album.get_track(parts['track'])
             # Genre tag is always set to Other as Google MP3 genre tags are not id3v1 id.
             id3v1 = struct.pack("!3s30s30s30s4s30sb", 'TAG', str(track['title']), str(track['artist']),
-        	str(track['album']), str(0), str(track['comment']), 12)
+        	str(track['album']), str(0), str(''), 12)
             buf = u.read(size - ID3V1_TRAILER_SIZE) + id3v1
         else:
             buf = u.read(size)
@@ -400,8 +395,8 @@ class GMusicFS(LoggingMixIn, Operations):
                 parts['artist']][parts['album']]
             files = ['.','..']
             for track in album.get_tracks(get_size=True):
-                files.append('%03d - %s.mp3' % (track['track'], 
-                                                formatNames(track['titleNorm'])))
+                files.append('%03d - %s.mp3' % (track['trackNumber'], 
+                                                formatNames(normalize(track['title']))))
             # Include cover image:
             cover = album.get_cover_url()
             if cover:
