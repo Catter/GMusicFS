@@ -327,18 +327,6 @@ class GMusicFS(LoggingMixIn, Operations):
         u.bytes_read = 0
         return fh
 
-    def __open_multi_part(self, urls, path):
-        """Starts a thread to download a multi-part track (Google Play All
-        Access) into a single file in the cache directory and return
-        an open file handle for it while it downloads.
-        """
-        buf = fifo.Buffer()
-        # Start downloading the multi part track in another thread:
-        downloader = AllAccessTrackDownloader(urls, buf, path)
-        downloader.start()
-        # Return the buffer, while the download is still happening:
-        return buf
-
     def release(self, path, fh):
         u = self.__open_files.get(fh, None)
         if u:
@@ -402,34 +390,6 @@ class GMusicFS(LoggingMixIn, Operations):
             if cover:
                 files.append('cover.jpg')
             return files
-
-class AllAccessTrackDownloader(threading.Thread):
-    """Multi-part track downloader"""
-    def __init__(self, urls, writer, path, buffer_bytes=32000):
-        self.urls = urls
-        self.writer = writer
-        self.path = path
-        threading.Thread.__init__(self)
-        self.buffer_bytes = buffer_bytes
-
-    def run(self):
-        byte_num = 0
-        for url in self.urls:
-            range_start, range_end = re.search(r'range=([0-9]*)-([0-9]*)', url).groups()
-            range_start, range_end = (int(range_start), int(range_end))
-            log.info("Downloading multi-part track: %s" % url)
-            u = urllib2.urlopen(url)
-            # There is overlap between parts, so skip the part that we already have:
-            u.read(byte_num - range_start)
-            # Buffer the rest of the file and write it as it comes:
-            while True:
-                data = u.read(self.buffer_bytes)
-                if data == '':
-                    break
-                byte_num += len(data)
-                self.writer.write(data)
-        log.info("Done downloading multi-part track: %s" % self.path)
-        self.writer.close()
 
 def main():
     parser = argparse.ArgumentParser(description='GMusicFS')
