@@ -20,7 +20,6 @@ import logging
 import datetime
 import unicodedata
 
-from oauth2client.client import OAuth2Credentials
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn, fuse_get_context
 from gmusicapi import Mobileclient as GoogleMusicAPI
 from gmusicapi import Musicmanager as GoogleMusicManager
