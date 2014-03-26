@@ -177,7 +177,7 @@ class MusicLibrary(object):
 
     def __register_music_manager(self):
 	self.manager = GoogleMusicManager()
-	self.manager_id = ':'.join(['{:02x}'.format((uuid.getnode() >> i) & 0xff) for i in range(0,8*6,8)][::-1])
+	self.manager_id = ':'.join(['{:02x}'.format((uuid.getnode() >> i) & 0xff) for i in range(0,8*6,8)][::-1]).upper()
 	log.info('Registering the google music manager...')
         cred_path = os.path.join(os.path.expanduser('~'), '.gmusicfs.ocred')
 	if not os.path.isfile(cred_path):
